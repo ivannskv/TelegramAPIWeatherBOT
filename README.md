@@ -1,4 +1,3 @@
-# TelegramAPIWeatherBOT
 ### README.md
 
 # TelegramAPIWeatherBOT
