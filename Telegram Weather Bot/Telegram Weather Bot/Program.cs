@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 
@@ -11,21 +13,16 @@ namespace Telegram_Weather_Bot
         private static DateTime currentDate;
         private static Timer timer;
 
-        static string weatherAPI = "6de2b75f56ae6a8fd6715a26f9ac2f15";
-        static string city = "Kostroma";
         static string lat = "57.7708";
         static string lon = "40.9344";
-        static string lang = "ru";
 
         private static string token { get; set; } = "7490036689:AAGZsfMTOuSareAbfoLmcfNZmWs4t7_Kh4Q";
         private static BotHost weatherBot;
 
-
-        private static void Main(string[] args)
+        static async Task Main(string[] args)
         {
             currentDate = DateTime.Today;
             timer = new Timer(UpdateDate, null, TimeSpan.Zero, TimeSpan.FromMinutes(10));
-
 
             weatherBot = new BotHost(token);
             weatherBot.Start();
@@ -33,27 +30,14 @@ namespace Telegram_Weather_Bot
             Console.ReadLine();
         }
 
-        /// <summary>
-        /// обновление даты для токена
-        /// </summary>
-        /// <param name="state"></param>
         private static void UpdateDate(object? state)
         {
-            DateTime today = DateTime.Today;
-            if(currentDate != today)
-            {
-                currentDate = today;
-            }
+            currentDate = DateTime.Today;
         }
 
-        /// <summary>
-        /// Ответ пользователю
-        /// </summary>
-        /// <param name="client"></param>
-        /// <param name="update"></param>
         private static async void OnMessage(ITelegramBotClient client, Update update)
         {
-            string command = update.Message?.Text?? "1";
+            string command = update.Message?.Text ?? "1";
             command = command.ToLower();
             switch (command)
             {
@@ -64,48 +48,74 @@ namespace Telegram_Weather_Bot
 
                 case "/текущая погода":
                 case "текущая погода":
-                    await client.SendTextMessageAsync(update.Message?.Chat.Id ?? 654530825, GetWeatherInfo());
+                    await client.SendTextMessageAsync(update.Message?.Chat.Id ?? 654530825, await GetWeatherInfo());
                     break;
             }
         }
 
-        private static string GetWeatherInfo()
-        {
-            string message = GetRespone().GetAwaiter().GetResult();
-            return message;
-        }
-
-        private static async Task<string> GetRespone()
+        private static async Task<string> GetWeatherInfo()
         {
             using (HttpClient httpClient = new HttpClient())
             {
-                string date = currentDate.ToString("yyyy-MM-dd");
-                string url = $"https://api.openweathermap.org/data/3.0/onecall/day_summary?lat=60.45&lon=-38.67&date=2023-03-30&tz=+03:00&appid={weatherAPI}";
+                string url = $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m";
                 HttpResponseMessage response = await httpClient.GetAsync(url);
 
-                if (!response.IsSuccessStatusCode)
+                if (response.IsSuccessStatusCode)
                 {
-                    
+                    string jsonResponse = await response.Content.ReadAsStringAsync();
+                    var weatherData = JsonSerializer.Deserialize<WeatherData>(jsonResponse);
+
+                    if (weatherData != null)
+                    {
+                        // Извлекаем данные о текущей погоде
+                        var currentWeather = weatherData.current;
+                        var currentTemperature = currentWeather.temperature_2m;
+                        var currentWindSpeed = currentWeather.wind_speed_10m;
+
+                        // Извлекаем данные о погоде на текущий час
+                        var hourlyWeather = weatherData.hourly;
+                        var hourlyTemperature = hourlyWeather.temperature_2m[0]; // Первый час
+                        var hourlyRelativeHumidity = hourlyWeather.relative_humidity_2m[0];
+                        var hourlyWindSpeed = hourlyWeather.wind_speed_10m[0];
+
+                        // Формируем сообщение о погоде
+                        return $"Погода в городе на момент {DateTime.Now}:\n" +
+                               $"💧 Влажность после полудня: {hourlyRelativeHumidity}%\n" +
+                               $"🌡 Температура макс/мин: {currentTemperature}°C\n" +
+                               $"Температура ☀️ днем/🌙 ночью: {hourlyTemperature}°C\n" +
+                               $"🌬 Скорость ветра: {currentWindSpeed} м/с";
+                    }
+                    else
+                    {
+                        return "Данные о погоде не найдены.";
+                    }
                 }
-
-                string jsonResponse = await response.Content.ReadAsStringAsync();
-                WeatherInfo weather = JsonSerializer.Deserialize<WeatherInfo>(jsonResponse);
-
-                if (weather != null)
+                else
                 {
-                    string weatherInfo = $"Погода в короде на момент {weather.date} {weather.tz}.\n" +
-                        $"☁️Облачность после полудня: {weather?.cloud_cover?.afternoon}\n" +
-                        $"💧Влажность после полудня: {weather?.humidity?.afternoon}%\n" +
-                        $"🌧Общее кол-во осадков: {weather?.precipitation?.total} мм\n" +
-                        $"🌡Температура макс/мин: {weather?.temperature?.max}/{weather?.temperature?.min}°C\n" +
-                        $"Температура ☀️днем/🌙ночью: {weather?.temperature?.morning}/{weather?.temperature?.night}°C\n" +
-                        $"Давление: {weather?.pressure?.afternoon} гП\n" +
-                        $"🌬Скорость ветра: {weather.wind?.max.speed} м/с, направление {weather.wind?.max.direction}°";
-                    return weatherInfo;
+                    return "Не удалось получить данные о погоде. Статус: " + response.StatusCode;
                 }
             }
-            
-            return "не удалость получить данные о погоде";
         }
+
+    }
+
+    public class WeatherData
+    {
+        public CurrentWeather current { get; set; }
+        public HourlyWeather hourly { get; set; }
+    }
+
+    public class CurrentWeather
+    {
+        public float temperature_2m { get; set; }
+        public float wind_speed_10m { get; set; }
+    }
+
+    public class HourlyWeather
+    {
+        public float[] temperature_2m { get; set; }
+        public int[] relative_humidity_2m { get; set; }
+        public float[] wind_speed_10m { get; set; }
     }
 }
+
