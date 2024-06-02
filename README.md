@@ -20,7 +20,7 @@ TelegramAPIWeatherBOT - это Telegram-бот, который предоста�
 ### Требования
 
 - .NET Core SDK
-- Аккаунт на [Telegram](https://telegram.org/)
+- Аккаунт в [Telegram](https://telegram.org/)
 - API ключ для [OpenWeatherMap](https://openweathermap.org/)
 
 ## Участники проекта
