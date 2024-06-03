@@ -13,8 +13,10 @@ namespace Telegram_Weather_Bot
         private static DateTime currentDate;
         private static Timer timer;
 
-        static string lat = "57.7708";
-        static string lon = "40.9344";
+        static string lat = "57.7665";
+        static string lon = "40.409269";
+        static string url = $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,cloud_cover,wind_speed_10m,visibility";
+
 
         private static string token { get; set; } = "7490036689:AAGZsfMTOuSareAbfoLmcfNZmWs4t7_Kh4Q";
         private static BotHost weatherBot;
@@ -32,13 +34,18 @@ namespace Telegram_Weather_Bot
 
         private static void UpdateDate(object? state)
         {
-            currentDate = DateTime.Today;
+            DateTime today = DateTime.Today;
+            if (currentDate != today)
+            {
+                currentDate = today;
+            }
         }
 
         private static async void OnMessage(ITelegramBotClient client, Update update)
         {
-            string command = update.Message?.Text ?? "1";
+            string command = update.Message?.Text ?? "0";
             command = command.ToLower();
+
             switch (command)
             {
                 case "/start":
@@ -48,16 +55,25 @@ namespace Telegram_Weather_Bot
 
                 case "/текущая погода":
                 case "текущая погода":
-                    await client.SendTextMessageAsync(update.Message?.Chat.Id ?? 654530825, await GetWeatherInfo());
+                    await client.SendTextMessageAsync(
+                        update.Message?.Chat.Id ?? 654530825,
+                        await GetWeatherInfo(url)
+                        );
                     break;
             }
         }
 
-        private static async Task<string> GetWeatherInfo()
+        /// <summary>
+        /// Получение информации о погоде
+        /// </summary>
+        /// <returns></returns>
+        private static async Task<string> GetWeatherInfo(string url)
         {
             using (HttpClient httpClient = new HttpClient())
             {
-                string url = $"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m";
+                string date = currentDate.ToString("yyyy-MM-dd");
+                int h = DateTime.Now.Hour;
+                Console.WriteLine(h);
                 HttpResponseMessage response = await httpClient.GetAsync(url);
 
                 if (response.IsSuccessStatusCode)
@@ -67,55 +83,19 @@ namespace Telegram_Weather_Bot
 
                     if (weatherData != null)
                     {
-                        // Извлекаем данные о текущей погоде
-                        var currentWeather = weatherData.current;
-                        var currentTemperature = currentWeather.temperature_2m;
-                        var currentWindSpeed = currentWeather.wind_speed_10m;
-
-                        // Извлекаем данные о погоде на текущий час
-                        var hourlyWeather = weatherData.hourly;
-                        var hourlyTemperature = hourlyWeather.temperature_2m[0]; // Первый час
-                        var hourlyRelativeHumidity = hourlyWeather.relative_humidity_2m[0];
-                        var hourlyWindSpeed = hourlyWeather.wind_speed_10m[0];
-
-                        // Формируем сообщение о погоде
-                        return $"Погода в городе на момент {DateTime.Now}:\n" +
-                               $"💧 Влажность после полудня: {hourlyRelativeHumidity}%\n" +
-                               $"🌡 Температура макс/мин: {currentTemperature}°C\n" +
-                               $"Температура ☀️ днем/🌙 ночью: {hourlyTemperature}°C\n" +
-                               $"🌬 Скорость ветра: {currentWindSpeed} м/с";
+                        return $"Вот какие я собрал данные о погоде на момент {date}\n" +
+                            $"🌡Текущая температура воздуха: {weatherData?.current.temperature_2m}°C\n" +
+                            $"🌬Скорость ветра: {weatherData?.current.wind_speed_10m}m/s\n" +
+                            $"💧Влажность воздуха: {weatherData?.hourly?.relative_humidity_2m[h] ?? 0}%\n";
                     }
                     else
-                    {
                         return "Данные о погоде не найдены.";
-                    }
                 }
                 else
-                {
                     return "Не удалось получить данные о погоде. Статус: " + response.StatusCode;
-                }
             }
         }
 
-    }
-
-    public class WeatherData
-    {
-        public CurrentWeather current { get; set; }
-        public HourlyWeather hourly { get; set; }
-    }
-
-    public class CurrentWeather
-    {
-        public float temperature_2m { get; set; }
-        public float wind_speed_10m { get; set; }
-    }
-
-    public class HourlyWeather
-    {
-        public float[] temperature_2m { get; set; }
-        public int[] relative_humidity_2m { get; set; }
-        public float[] wind_speed_10m { get; set; }
     }
 }
 
